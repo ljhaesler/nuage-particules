@@ -4,6 +4,8 @@ const ctx = canvas.getContext("2d");
 let particles = [];
 let audioData = [];
 let audioAnalyserNode;
+let yRatio;
+let xRatio;
 let bufferLength;
 let t = 0;
 
@@ -17,24 +19,47 @@ function resize() {
 }
 
 function setupAudio() {
-  const audioElement = new Audio("./assets/audio/500hz.mp3");
   const audioContext = new AudioContext();
 
   audioAnalyserNode = audioContext.createAnalyser();
-  const audioSourceNode = audioContext.createMediaElementSource(audioElement);
 
-  audioSourceNode.connect(audioAnalyserNode);
+  const gainNode = audioContext.createGain();
+
+  const oscillatorNodeTriangle = audioContext.createOscillator();
+  const oscillatorNodeSquare = audioContext.createOscillator();
+  const oscillatorNodeSine = audioContext.createOscillator();
+
+  oscillatorNodeTriangle.type = "triangle";
+  oscillatorNodeSquare.type = "square";
+  oscillatorNodeSine.type = "sine";
+
+  oscillatorNodeTriangle.frequency.value = 220;
+  oscillatorNodeSquare.frequency.value = 0;
+  oscillatorNodeSine.frequency.value = 0;
+
+  oscillatorNodeTriangle.start();
+  oscillatorNodeSquare.start();
+  oscillatorNodeSine.start();
+
+  oscillatorNodeSquare.connect(gainNode);
+  oscillatorNodeTriangle.connect(gainNode);
+  oscillatorNodeSine.connect(gainNode);
+
+  gainNode.connect(audioAnalyserNode);
   audioAnalyserNode.connect(audioContext.destination);
 
-  audioAnalyserNode.fftSize = 512;
+  audioAnalyserNode.fftSize = 1024;
   bufferLength = audioAnalyserNode.frequencyBinCount;
   audioData = new Uint8Array(bufferLength);
 
+  xRatio = window.innerWidth / bufferLength;
+  yRatio = window.innerHeight / bufferLength;
   document.addEventListener("click", () => {
     if (audioContext.state === "suspended") {
       audioContext.resume();
+    } else {
+      audioContext.suspend();
     }
-    audioElement.play();
   });
 }
 
@@ -54,9 +79,9 @@ function createParticles() {
       vy: 0,
       r: rand(config.radiusMin, config.radiusMax),
       phase: rand(0, config.maxPhase),
-      color: `rgba(${255 * rand(0, 1)},
-      ${255 * rand(0, 1)},
-      ${255 * rand(0, 1)}, 
+      color: `rgba(${config.maxColorSat * rand(0, 1)},
+      ${config.maxColorSat * rand(0, 1)},
+      ${config.maxColorSat * rand(0, 1)}, 
       ${config.pAlpha})`,
     });
   }
@@ -65,13 +90,13 @@ function createParticles() {
 }
 
 function update() {
-  let yRatio = window.innerHeight / bufferLength;
-  let xRatio = window.innerWidth / bufferLength;
   audioAnalyserNode.getByteTimeDomainData(audioData);
-  const audioAvg =
-    audioData.reduce((acc, curr) => acc + curr, 0) / audioData.length;
+  //   const audioAvg =
+  //     audioData.reduce((acc, curr) => acc + curr, 0) / audioData.length;
+  const w = window.innerWidth;
+  const h = window.innerHeight;
+
   for (const p of particles) {
-    const w = window.innerWidth;
     const nx = p.x / w;
 
     // p.vx =
@@ -84,10 +109,8 @@ function update() {
     // inverting the calculation such that vx is a product of p.y and yRatio
     // seems to ensure that the particles spread-apart over time.
     // the inverse will make the particles collapse onto eachother
+    p.vy = (audioData[Math.floor(p.x / xRatio)] - 128) * config.xSpeed;
     p.vx = (audioData[Math.floor(p.y / yRatio)] - 128) * config.xSpeed;
-    p.vy =
-      (audioData[Math.floor(p.x / xRatio)] - 128) * config.xSpeed ||
-      config.xSpeed;
 
     // p.vx = (audioData[Math.floor(p.y / yRatio)] - 128) * config.xSpeed;
     // p.vy = Math.cos(nx * Math.PI) * (audioData[Math.floor(p.x / xRatio)] - 128);
@@ -96,11 +119,13 @@ function update() {
     p.y += p.vy;
 
     // if a particle reaches the end of the screen
-    // redraw it back at the start
-    if (p.x < 1) p.x = window.innerWidth - 1;
-    if (p.x > window.innerWidth - 1) p.x = 1;
-    if (p.y < 1) p.y = window.innerHeight - 1;
-    if (p.y > window.innerHeight - 1) p.y = 1;
+    // it's necessary to 'respawn' it somewhere randomly inside the canvas
+    // otherwise particles tend to get stuck in places
+    // it also showcases the very 'unrandomness' of Math.random
+    if (p.x <= 0 || isNaN(p.x)) p.x = rand(5, w - 5);
+    if (p.x >= w || isNaN(p.x)) p.x = rand(5, w - 5);
+    if (p.y <= 0 || isNaN(p.y)) p.y = rand(5, h - 5);
+    if (p.y >= h || isNaN(p.y)) p.y = rand(5, h - 5);
   }
 }
 
