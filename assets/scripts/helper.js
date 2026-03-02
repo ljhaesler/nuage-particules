@@ -3,9 +3,10 @@ const ctx = canvas.getContext("2d");
 
 let particles = [];
 let audioData = [];
+const w = window.innerWidth;
+const h = window.innerHeight;
 let audioAnalyserNode;
 let bufferLength;
-let t = 0;
 
 function resize() {
   const dpr = Math.max(1, window.devicePixelRatio || 1);
@@ -17,7 +18,7 @@ function resize() {
 }
 
 function setupAudio() {
-  const audioElement = new Audio("./assets/audio/500hz.mp3");
+  const audioElement = new Audio("./assets/audio/sad-violin.mp3");
   const audioContext = new AudioContext();
 
   audioAnalyserNode = audioContext.createAnalyser();
@@ -26,7 +27,7 @@ function setupAudio() {
   audioSourceNode.connect(audioAnalyserNode);
   audioAnalyserNode.connect(audioContext.destination);
 
-  audioAnalyserNode.fftSize = 512;
+  audioAnalyserNode.fftSize = 8192;
   bufferLength = audioAnalyserNode.frequencyBinCount;
   audioData = new Uint8Array(bufferLength);
 
@@ -47,6 +48,10 @@ function createParticles() {
   );
 
   for (let i = 0; i < count; i++) {
+    const red = 255 - rand(0, config.maxColorSat);
+    const green = 255 - rand(0, config.maxColorSat);
+    const blue = 255 - rand(0, config.maxColorSat);
+
     particles.push({
       x: rand(0, window.innerWidth),
       y: rand(0, window.innerHeight),
@@ -54,9 +59,12 @@ function createParticles() {
       vy: 0,
       r: rand(config.radiusMin, config.radiusMax),
       phase: rand(0, config.maxPhase),
-      color: `rgba(${255 * rand(0, 1)},
-      ${255 * rand(0, 1)},
-      ${255 * rand(0, 1)}, 
+      red: red,
+      green: green,
+      blue: blue,
+      color: `rgba(${red},
+      ${green},
+      ${blue}, 
       ${config.pAlpha})`,
     });
   }
@@ -68,39 +76,17 @@ function update() {
   let yRatio = window.innerHeight / bufferLength;
   let xRatio = window.innerWidth / bufferLength;
   audioAnalyserNode.getByteTimeDomainData(audioData);
-  const audioAvg =
-    audioData.reduce((acc, curr) => acc + curr, 0) / audioData.length;
   for (const p of particles) {
-    const w = window.innerWidth;
-    const nx = p.x / w;
+    // const nx = p.x / w;
+    // p.vx = config.xSpeed;
+    // p.vy = Math.cos(nx * Math.PI + p.phase) * config.ySpeed;
+    p.x += (audioData[Math.floor(p.y / yRatio)] - 128) * config.xSpeed;
+    p.y += (audioData[Math.floor(p.x / xRatio)] - 128) * config.ySpeed;
 
-    // p.vx =
-    //   (audioData[Math.floor(p.x / xRatio)] - 128) * config.xSpeed ||
-    //   config.xSpeed;
-    // p.vy =
-    //   (audioData[Math.floor(p.y / yRatio)] - 128) * config.xSpeed ||
-    //   Math.cos(nx * Math.PI + p.phase) * config.xSpeed;
-
-    // inverting the calculation such that vx is a product of p.y and yRatio
-    // seems to ensure that the particles spread-apart over time.
-    // the inverse will make the particles collapse onto eachother
-    p.vx = (audioData[Math.floor(p.y / yRatio)] - 128) * config.xSpeed;
-    p.vy =
-      (audioData[Math.floor(p.x / xRatio)] - 128) * config.xSpeed ||
-      config.xSpeed;
-
-    // p.vx = (audioData[Math.floor(p.y / yRatio)] - 128) * config.xSpeed;
-    // p.vy = Math.cos(nx * Math.PI) * (audioData[Math.floor(p.x / xRatio)] - 128);
-
-    p.x += p.vx;
-    p.y += p.vy;
-
-    // if a particle reaches the end of the screen
-    // redraw it back at the start
-    if (p.x < 1) p.x = window.innerWidth - 1;
-    if (p.x > window.innerWidth - 1) p.x = 1;
-    if (p.y < 1) p.y = window.innerHeight - 1;
-    if (p.y > window.innerHeight - 1) p.y = 1;
+    if (p.x <= 0 || isNaN(p.x)) p.x = rand(5, w - 5);
+    if (p.x >= w || isNaN(p.x)) p.x = rand(5, w - 5);
+    if (p.y <= 0 || isNaN(p.y)) p.y = rand(5, h - 5);
+    if (p.y >= h || isNaN(p.y)) p.y = rand(5, h - 5);
   }
 }
 

@@ -7,7 +7,8 @@ let audioAnalyserNode;
 let yRatio;
 let xRatio;
 let bufferLength;
-let t = 0;
+const w = window.innerWidth;
+const h = window.innerHeight;
 
 function resize() {
   const dpr = Math.max(1, window.devicePixelRatio || 1);
@@ -33,9 +34,9 @@ function setupAudio() {
   oscillatorNodeSquare.type = "square";
   oscillatorNodeSine.type = "sine";
 
-  oscillatorNodeTriangle.frequency.value = 220;
+  oscillatorNodeTriangle.frequency.value = 0;
   oscillatorNodeSquare.frequency.value = 0;
-  oscillatorNodeSine.frequency.value = 0;
+  oscillatorNodeSine.frequency.value = 500;
 
   oscillatorNodeTriangle.start();
   oscillatorNodeSquare.start();
@@ -48,9 +49,9 @@ function setupAudio() {
   gainNode.connect(audioAnalyserNode);
   audioAnalyserNode.connect(audioContext.destination);
 
-  audioAnalyserNode.fftSize = 1024;
+  audioAnalyserNode.fftSize = 512;
   bufferLength = audioAnalyserNode.frequencyBinCount;
-  audioData = new Uint8Array(bufferLength);
+  audioData = new Float32Array(bufferLength);
 
   xRatio = window.innerWidth / bufferLength;
   yRatio = window.innerHeight / bufferLength;
@@ -90,38 +91,11 @@ function createParticles() {
 }
 
 function update() {
-  audioAnalyserNode.getByteTimeDomainData(audioData);
-  //   const audioAvg =
-  //     audioData.reduce((acc, curr) => acc + curr, 0) / audioData.length;
-  const w = window.innerWidth;
-  const h = window.innerHeight;
-
+  audioAnalyserNode.getFloatTimeDomainData(audioData);
   for (const p of particles) {
-    const nx = p.x / w;
+    p.y += audioData[(p.x / xRatio) | 0];
+    p.x += audioData[(p.y / yRatio) | 0];
 
-    // p.vx =
-    //   (audioData[Math.floor(p.x / xRatio)] - 128) * config.xSpeed ||
-    //   config.xSpeed;
-    // p.vy =
-    //   (audioData[Math.floor(p.y / yRatio)] - 128) * config.xSpeed ||
-    //   Math.cos(nx * Math.PI + p.phase) * config.xSpeed;
-
-    // inverting the calculation such that vx is a product of p.y and yRatio
-    // seems to ensure that the particles spread-apart over time.
-    // the inverse will make the particles collapse onto eachother
-    p.vy = (audioData[Math.floor(p.x / xRatio)] - 128) * config.xSpeed;
-    p.vx = (audioData[Math.floor(p.y / yRatio)] - 128) * config.xSpeed;
-
-    // p.vx = (audioData[Math.floor(p.y / yRatio)] - 128) * config.xSpeed;
-    // p.vy = Math.cos(nx * Math.PI) * (audioData[Math.floor(p.x / xRatio)] - 128);
-
-    p.x += p.vx;
-    p.y += p.vy;
-
-    // if a particle reaches the end of the screen
-    // it's necessary to 'respawn' it somewhere randomly inside the canvas
-    // otherwise particles tend to get stuck in places
-    // it also showcases the very 'unrandomness' of Math.random
     if (p.x <= 0 || isNaN(p.x)) p.x = rand(5, w - 5);
     if (p.x >= w || isNaN(p.x)) p.x = rand(5, w - 5);
     if (p.y <= 0 || isNaN(p.y)) p.y = rand(5, h - 5);
